@@ -12,13 +12,13 @@ const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
 
 /**
  * Fetch reviews from Okendo API
- * Endpoint: https://api.okendo.io/v1/stores/{storeId}/reviews
+ * Endpoint: https://api.okendo.io/stores/{storeId}/reviews
  * Handles pagination if nextUrl is present
  */
 async function fetchOkendoReviews(storeId) {
   try {
-    // Okendo API endpoint - fetches all reviews
-    const baseUrl = `https://api.okendo.io/v1/stores/${storeId}/reviews`;
+    // Okendo API endpoint - fetches all reviews (no /v1/)
+    const baseUrl = `https://api.okendo.io/stores/${storeId}/reviews`;
     let okendoApiUrl = baseUrl;
 
     // Okendo API doesn't require authentication for public reviews endpoint
@@ -76,9 +76,11 @@ async function fetchOkendoReviews(storeId) {
       if (data.nextUrl) {
         // nextUrl might be relative or absolute
         if (data.nextUrl.startsWith('http')) {
+          // Already a full URL
           okendoApiUrl = data.nextUrl;
         } else {
-          okendoApiUrl = `https://api.okendo.io${data.nextUrl}`;
+          // Relative URL - add /v1/ prefix (nextUrl doesn't include /v1/)
+          okendoApiUrl = `https://api.okendo.io/v1${data.nextUrl}`;
         }
         pageCount++;
       } else {
@@ -229,7 +231,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const model = req.body?.model || 'meta-llama/Meta-Llama-3.1-8B-Instruct';
+    const model = req.body?.model || 'zai-org/GLM-4.7-Flash:zai-org';
 
     // Check for API key
     if (!process.env.HUGGINGFACE_API_KEY) {
