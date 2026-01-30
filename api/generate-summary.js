@@ -167,6 +167,35 @@ async function generateSummary(reviewText, model = 'zai-org/GLM-4.7-Flash:zai-or
       ? reviewText.substring(0, maxLength) 
       : reviewText;
 
+    // Prepare the payload
+    const payload = {
+      messages: [
+        {
+          role: "user",
+          content: `Please provide a concise summary (50-200 words) of the following customer reviews:\n\n${truncatedText}\n\nSummary:`,
+        },
+      ],
+      model: model,
+      max_tokens: 250,
+      temperature: 0.7,
+    };
+
+    // Log the payload being sent to Hugging Face
+    console.log('=== Hugging Face API Request ===');
+    console.log('URL: https://router.huggingface.co/v1/chat/completions');
+    console.log('Model:', model);
+    console.log('Payload:', JSON.stringify({
+      ...payload,
+      messages: payload.messages.map(msg => ({
+        ...msg,
+        content: msg.content.length > 500 
+          ? msg.content.substring(0, 500) + `... [truncated, total length: ${msg.content.length} chars]`
+          : msg.content
+      }))
+    }, null, 2));
+    console.log('Input Text Length:', truncatedText.length, 'characters');
+    console.log('================================');
+
     // Use Hugging Face Router Chat Completions API
     const response = await fetch(
       "https://router.huggingface.co/v1/chat/completions",
@@ -176,17 +205,7 @@ async function generateSummary(reviewText, model = 'zai-org/GLM-4.7-Flash:zai-or
           "Content-Type": "application/json",
         },
         method: "POST",
-        body: JSON.stringify({
-          messages: [
-            {
-              role: "user",
-              content: `Please provide a concise summary (50-200 words) of the following customer reviews:\n\n${truncatedText}\n\nSummary:`,
-            },
-          ],
-          model: model,
-          max_tokens: 250,
-          temperature: 0.7,
-        }),
+        body: JSON.stringify(payload),
       }
     );
 
@@ -197,14 +216,45 @@ async function generateSummary(reviewText, model = 'zai-org/GLM-4.7-Flash:zai-or
 
     const result = await response.json();
     
+    // Log the full response for debugging
+    console.log('Hugging Face API Response:', JSON.stringify(result, null, 2));
+    
     // Extract summary from chat completions response
-    if (result.choices && result.choices[0] && result.choices[0].message) {
-      return result.choices[0].message.content.trim();
+    let summary = null;
+    
+    if (result.choices && result.choices[0]) {
+      // Chat completions format
+      if (result.choices[0].message && result.choices[0].message.content) {
+        summary = result.choices[0].message.content.trim();
+      } else if (result.choices[0].text) {
+        summary = result.choices[0].text.trim();
+      } else if (typeof result.choices[0] === 'string') {
+        summary = result.choices[0].trim();
+      }
     } else if (result.content) {
-      return result.content.trim();
-    } else {
-      throw new Error('Unexpected response format from Hugging Face API');
+      summary = result.content.trim();
+    } else if (result.text) {
+      summary = result.text.trim();
+    } else if (result.summary_text) {
+      summary = result.summary_text.trim();
+    } else if (Array.isArray(result) && result[0]) {
+      if (typeof result[0] === 'string') {
+        summary = result[0].trim();
+      } else if (result[0].text) {
+        summary = result[0].text.trim();
+      } else if (result[0].content) {
+        summary = result[0].content.trim();
+      }
+    } else if (typeof result === 'string') {
+      summary = result.trim();
     }
+    
+    if (!summary || summary.length === 0) {
+      console.error('Could not extract summary from response. Full response:', JSON.stringify(result, null, 2));
+      throw new Error('Failed to extract summary from Hugging Face API response. Check logs for full response.');
+    }
+    
+    return summary;
   } catch (error) {
     console.error('Error generating summary:', error);
     throw new Error(`Failed to generate summary: ${error.message}`);
