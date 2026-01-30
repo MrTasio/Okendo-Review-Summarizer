@@ -176,6 +176,7 @@ async function generateSummaryWithGemini(reviewText, modelName = 'gemini-2.5-fla
 Format requirements:
 - Write in third person (e.g., "Customers say", "Users report", "Many mention")
 - Use a single, flowing paragraph (no bullet points or lists)
+- Refer to the product by its actual name (extract from reviews) or use "this product" - do NOT use generic terms like "this supplement" or "Atika" unless it's the product name
 - Focus on key themes, common sentiments, and main benefits
 - Include specific details mentioned by customers (flavors, textures, colors, etc.)
 - Mention both positive feedback and any common concerns or drawbacks
@@ -183,9 +184,9 @@ Format requirements:
 - Make it read like a cohesive summary that flows smoothly
 
 Example format:
-"Customers say this supplement tastes great with a citrus flavor and mixes well into drinks and smoothies. Users report improvements in skin texture, firmness, and hydration within weeks to months of use. Many mention their skin looks smoother, brighter, and more even-toned. The powder dissolves easily without clumping, though some note it can stain plastic containers due to its bright orange color. Several customers appreciate the comprehensive ingredient list and clinical dosing. Common feedback includes increased energy levels and stronger nails as additional benefits. While some find the price high, many feel the results justify the cost and have replaced multiple other supplements with this single product."
+"Customers say this product tastes great with a citrus flavor and mixes well into drinks and smoothies. Users report improvements in skin texture, firmness, and hydration within weeks to months of use. Many mention their skin looks smoother, brighter, and more even-toned. The powder dissolves easily without clumping, though some note it can stain plastic containers due to its bright orange color. Several customers appreciate the comprehensive ingredient list and clinical dosing. Common feedback includes increased energy levels and stronger nails as additional benefits. While some find the price high, many feel the results justify the cost and have replaced multiple other supplements with this single product."
 
-Now summarize these customer reviews following the exact format above:\n\n${truncatedText}`;
+Now summarize these customer reviews following the exact format above. Make sure to refer to the specific product name mentioned in the reviews (not "Atika" unless that's the product name):\n\n${truncatedText}`;
 
     // Log the request
     console.log('=== Google Gemini API Request (SDK) ===');
