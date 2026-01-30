@@ -176,7 +176,7 @@ async function generateSummaryWithGemini(reviewText, modelName = 'gemini-2.5-fla
 Format requirements:
 - Write in third person (e.g., "Customers say", "Users report", "Many mention")
 - Use a single, flowing paragraph (no bullet points or lists)
-- Refer to the product by its actual name (extract from reviews) or use "this product" - do NOT use generic terms like "this supplement" or "Atika" unless it's the product name
+- Refer to the product by its actual name (extract from reviews) or use "this product" - do NOT use "Atika"
 - Focus on key themes, common sentiments, and main benefits
 - Include specific details mentioned by customers (flavors, textures, colors, etc.)
 - Mention both positive feedback and any common concerns or drawbacks
