@@ -1,0 +1,17 @@
+{
+  "name": "review-summary-api",
+  "version": "1.0.0",
+  "description": "Vercel API for generating review summaries using Hugging Face",
+  "main": "api/generate-summary.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel deploy"
+  },
+  "dependencies": {
+    "@huggingface/inference": "^2.6.0"
+  },
+  "devDependencies": {
+    "@vercel/node": "^3.0.0"
+  }
+}
+
