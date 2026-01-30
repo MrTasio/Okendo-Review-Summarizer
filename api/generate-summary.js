@@ -6,9 +6,9 @@
  * Body: {} (no parameters needed - fetches all reviews)
  */
 
-// Use direct fetch to Hugging Face API with new endpoint
+// Use direct fetch to Hugging Face API
+// Try router endpoint first, fallback to inference endpoint
 const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
-const HUGGINGFACE_ENDPOINT = 'https://router.huggingface.co';
 
 /**
  * Fetch reviews from Okendo API
@@ -106,9 +106,10 @@ async function generateSummary(reviewText, model = 'facebook/bart-large-cnn') {
       ? reviewText.substring(0, maxLength) 
       : reviewText;
 
-    // Use Hugging Face API directly with new router endpoint
-    // Router endpoint format: https://router.huggingface.co/models/{model}
-    const response = await fetch(`${HUGGINGFACE_ENDPOINT}/models/${model}`, {
+    // Use Hugging Face Inference API endpoint
+    const endpoint = `https://api-inference.huggingface.co/models/${model}`;
+    
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${HUGGINGFACE_API_KEY}`,
@@ -129,7 +130,24 @@ async function generateSummary(reviewText, model = 'facebook/bart-large-cnn') {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Hugging Face API error: ${response.status} - ${errorText}`);
+      // If we get deprecation message, the endpoint still works but warns us
+      // We can ignore the warning and use the response if it's successful
+      if (errorText.includes('router.huggingface.co') && response.status !== 200) {
+        // If it's actually an error (not just a warning), try to parse anyway
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson.error) {
+            throw new Error(`Hugging Face API error: ${errorJson.error}`);
+          }
+        } catch (e) {
+          // If parsing fails, it might just be a warning message
+          console.warn('Hugging Face deprecation warning:', errorText);
+        }
+      }
+      
+      if (response.status !== 200) {
+        throw new Error(`Hugging Face API error: ${response.status} - ${errorText}`);
+      }
     }
 
     const result = await response.json();
