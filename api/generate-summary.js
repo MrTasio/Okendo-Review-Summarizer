@@ -171,7 +171,21 @@ async function generateSummaryWithGemini(reviewText, modelName = 'gemini-2.5-fla
       ? reviewText.substring(0, maxLength) 
       : reviewText;
 
-    const prompt = `Please provide a concise summary (50-200 words) of the following customer reviews. Focus on key themes, common sentiments, and main benefits mentioned:\n\n${truncatedText}`;
+    const prompt = `Please provide a concise summary (100-250 words) of the following customer reviews. 
+
+Format requirements:
+- Write in third person (e.g., "Customers say", "Users report", "Many mention")
+- Use a single, flowing paragraph (no bullet points or lists)
+- Focus on key themes, common sentiments, and main benefits
+- Include specific details mentioned by customers (flavors, textures, colors, etc.)
+- Mention both positive feedback and any common concerns or drawbacks
+- Write in a professional, natural tone
+- Make it read like a cohesive summary that flows smoothly
+
+Example format:
+"Customers say this supplement tastes great with a citrus flavor and mixes well into drinks and smoothies. Users report improvements in skin texture, firmness, and hydration within weeks to months of use. Many mention their skin looks smoother, brighter, and more even-toned. The powder dissolves easily without clumping, though some note it can stain plastic containers due to its bright orange color. Several customers appreciate the comprehensive ingredient list and clinical dosing. Common feedback includes increased energy levels and stronger nails as additional benefits. While some find the price high, many feel the results justify the cost and have replaced multiple other supplements with this single product."
+
+Now summarize these customer reviews following the exact format above:\n\n${truncatedText}`;
 
     // Log the request
     console.log('=== Google Gemini API Request (SDK) ===');
