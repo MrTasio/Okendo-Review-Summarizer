@@ -229,8 +229,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Get Okendo Store ID from environment or request
-    const okendoStoreId = process.env.OKENDO_STORE_ID || '4300ec1c-fb7f-4c70-ab01-abaff548cb9a';
     const model = req.body?.model || 'meta-llama/Meta-Llama-3.1-8B-Instruct';
 
     // Check for API key
@@ -238,15 +236,35 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Hugging Face API key not configured' });
     }
 
-    // Fetch all reviews from Okendo
-    const reviewsData = await fetchOkendoReviews(okendoStoreId);
-
-    // Extract review texts
-    const reviewTexts = extractReviewTexts(reviewsData);
+    // Reviews should be sent from the client (browser) to avoid 403 errors
+    // The client fetches reviews and sends them here for summarization
+    let reviewTexts = [];
+    
+    if (req.body.reviews && Array.isArray(req.body.reviews)) {
+      // Extract body from reviews sent from client
+      reviewTexts = req.body.reviews
+        .map(review => review.body)
+        .filter(body => body && body.trim().length > 0);
+    } else if (req.body.reviewTexts && Array.isArray(req.body.reviewTexts)) {
+      // Alternative: client sends array of review texts directly
+      reviewTexts = req.body.reviewTexts.filter(text => text && text.trim().length > 0);
+    } else {
+      // Fallback: try to fetch from Okendo (may fail with 403)
+      const okendoStoreId = process.env.OKENDO_STORE_ID || '4300ec1c-fb7f-4c70-ab01-abaff548cb9a';
+      try {
+        const reviewsData = await fetchOkendoReviews(okendoStoreId);
+        reviewTexts = extractReviewTexts(reviewsData);
+      } catch (error) {
+        return res.status(400).json({ 
+          error: 'No reviews provided. Please fetch reviews from the browser and send them in the request body.',
+          details: error.message
+        });
+      }
+    }
     
     if (reviewTexts.length === 0) {
       return res.status(404).json({ 
-        error: 'No reviews found',
+        error: 'No reviews found. Please ensure reviews are sent in the request body.',
         reviewCount: 0
       });
     }
