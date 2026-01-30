@@ -21,15 +21,15 @@ async function fetchOkendoReviews(storeId) {
     const baseUrl = `https://api.okendo.io/v1/stores/${storeId}/reviews`;
     let okendoApiUrl = baseUrl;
 
+    // Okendo API doesn't require authentication for public reviews endpoint
+    // Mimic browser request to avoid 403 errors
     const headers = {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json'
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Referer': 'https://www.atikawellness.com/',
+      'Origin': 'https://www.atikawellness.com'
     };
-
-    // Add API key if available
-    if (process.env.OKENDO_API_KEY) {
-      headers['Authorization'] = `Bearer ${process.env.OKENDO_API_KEY}`;
-    }
 
     let allReviews = [];
     let hasMore = true;
@@ -41,7 +41,28 @@ async function fetchOkendoReviews(storeId) {
       const response = await fetch(okendoApiUrl, { headers });
 
       if (!response.ok) {
-        throw new Error(`Okendo API error: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        let errorMessage = `Okendo API error: ${response.status} ${response.statusText}`;
+        
+        if (response.status === 403) {
+          errorMessage += '. The API may be blocking server-side requests. This endpoint might only be accessible from browser requests.';
+        }
+        
+        if (errorText) {
+          try {
+            const errorJson = JSON.parse(errorText);
+            if (errorJson.message) {
+              errorMessage += ` Details: ${errorJson.message}`;
+            }
+          } catch (e) {
+            // If not JSON, include raw error text
+            if (errorText.length < 200) {
+              errorMessage += ` Response: ${errorText}`;
+            }
+          }
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
