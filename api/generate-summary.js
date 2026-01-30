@@ -159,7 +159,7 @@ function combineReviews(reviewTexts) {
 /**
  * Generate summary using Hugging Face Router Chat Completions API
  */
-async function generateSummary(reviewText, model = 'meta-llama/Meta-Llama-3.1-8B-Instruct') {
+async function generateSummary(reviewText, model = 'zai-org/GLM-4.7-Flash:zai-org') {
   try {
     // Truncate if too long (Hugging Face models have token limits)
     const maxLength = 8000; // Adjust based on model limits
@@ -276,6 +276,14 @@ export default async function handler(req, res) {
 
     // Generate summary
     const summary = await generateSummary(combinedText, model);
+
+    // Log the summary result
+    console.log('=== Review Summary Generated ===');
+    console.log('Review Count:', reviewTexts.length);
+    console.log('Model Used:', model);
+    console.log('Summary:', summary);
+    console.log('Summary Length:', summary.length, 'characters');
+    console.log('================================');
 
     // Return result
     return res.status(200).json({
