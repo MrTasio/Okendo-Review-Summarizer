@@ -175,9 +175,9 @@ async function generateSummary(reviewText, model = 'zai-org/GLM-4.7-Flash:zai-or
           content: `Please provide a concise summary (50-200 words) of the following customer reviews:\n\n${truncatedText}\n\nSummary:`,
         },
       ],
-      model: model,
-      max_tokens: 250,
-      temperature: 0.7,
+          model: model,
+          max_tokens: 500, // Increased to allow full response
+          temperature: 0.7,
     };
 
     // Log the payload being sent to Hugging Face
@@ -223,13 +223,56 @@ async function generateSummary(reviewText, model = 'zai-org/GLM-4.7-Flash:zai-or
     let summary = null;
     
     if (result.choices && result.choices[0]) {
-      // Chat completions format
-      if (result.choices[0].message && result.choices[0].message.content) {
-        summary = result.choices[0].message.content.trim();
-      } else if (result.choices[0].text) {
-        summary = result.choices[0].text.trim();
-      } else if (typeof result.choices[0] === 'string') {
-        summary = result.choices[0].trim();
+      const choice = result.choices[0];
+      const message = choice.message || {};
+      
+      // GLM-4.7-Flash uses reasoning_content for thinking, content for final answer
+      // If content is empty but reasoning_content exists, extract the summary from reasoning_content
+      if (message.content && message.content.trim().length > 0) {
+        summary = message.content.trim();
+      } else if (message.reasoning_content && message.reasoning_content.trim().length > 0) {
+        // Fallback: extract summary from reasoning_content
+        // Try to find the actual summary in the reasoning content
+        const reasoning = message.reasoning_content;
+        
+        // Look for patterns like "Summary:" or "Final Summary:" or the last paragraph
+        const summaryMatch = reasoning.match(/(?:Summary|Final Summary|Final Answer)[:\s]*(.+?)(?:\n\n|$)/is);
+        if (summaryMatch && summaryMatch[1]) {
+          summary = summaryMatch[1].trim();
+        } else {
+          // If no clear summary marker, try to extract the last meaningful paragraph
+          const paragraphs = reasoning.split('\n\n').filter(p => p.trim().length > 20);
+          if (paragraphs.length > 0) {
+            // Get the last paragraph that looks like a summary (not a bullet point list)
+            for (let i = paragraphs.length - 1; i >= 0; i--) {
+              const para = paragraphs[i].trim();
+              // Skip if it's clearly part of the reasoning process (starts with numbers, bullets, etc.)
+              if (!para.match(/^\d+\.|^[-*•]/) && para.length > 50) {
+                summary = para;
+                break;
+              }
+            }
+          }
+          
+          // If still no summary, use the reasoning content but clean it up
+          if (!summary || summary.length < 50) {
+            // Remove reasoning markers and extract the actual summary text
+            summary = reasoning
+              .replace(/^\d+\.\s*\*\*[^*]+\*\*:?\s*/gm, '') // Remove numbered sections
+              .replace(/^[-*•]\s*/gm, '') // Remove bullet points
+              .replace(/\*\*([^*]+)\*\*/g, '$1') // Remove bold markers
+              .trim();
+            
+            // Take the last 300 characters as it's likely the summary
+            if (summary.length > 300) {
+              summary = summary.substring(summary.length - 300).trim();
+            }
+          }
+        }
+      } else if (choice.text) {
+        summary = choice.text.trim();
+      } else if (typeof choice === 'string') {
+        summary = choice.trim();
       }
     } else if (result.content) {
       summary = result.content.trim();
