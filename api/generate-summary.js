@@ -1,13 +1,17 @@
 /**
  * Vercel Serverless Function
- * Generates AI summaries from product reviews using Hugging Face
+ * Generates AI summaries from product reviews using Google Gemini or Hugging Face
  * 
  * POST /api/generate-summary
- * Body: {} (no parameters needed - fetches all reviews)
+ * Body: { reviews: ["review text 1", "review text 2", ...] }
  */
 
-// Use direct fetch to Hugging Face API
-// Try router endpoint first, fallback to inference endpoint
+// Import Google Generative AI SDK
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+// AI Provider Configuration
+const AI_PROVIDER = process.env.AI_PROVIDER || 'gemini'; // 'gemini' or 'huggingface'
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
 
 /**
@@ -157,9 +161,53 @@ function combineReviews(reviewTexts) {
 }
 
 /**
- * Generate summary using Hugging Face Router Chat Completions API
+ * Generate summary using Google Gemini SDK
  */
-async function generateSummary(reviewText, model = 'zai-org/GLM-4.7-Flash:zai-org') {
+async function generateSummaryWithGemini(reviewText, modelName = 'gemini-2.5-flash') {
+  try {
+    // Truncate if too long (Gemini has token limits)
+    const maxLength = 30000; // Gemini supports large inputs, but we'll limit for safety
+    const truncatedText = reviewText.length > maxLength 
+      ? reviewText.substring(0, maxLength) 
+      : reviewText;
+
+    const prompt = `Please provide a concise summary (50-200 words) of the following customer reviews. Focus on key themes, common sentiments, and main benefits mentioned:\n\n${truncatedText}`;
+
+    // Log the request
+    console.log('=== Google Gemini API Request (SDK) ===');
+    console.log('Model:', modelName);
+    console.log('Input Text Length:', truncatedText.length, 'characters');
+    console.log('Prompt Preview:', prompt.length > 500 
+      ? prompt.substring(0, 500) + `... [truncated, total length: ${prompt.length} chars]`
+      : prompt);
+    console.log('================================');
+
+    // Initialize Gemini
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: modelName });
+
+    // Generate content
+    const result = await model.generateContent(prompt);
+    const response = result.response;
+    const summary = response.text();
+
+    // Log the response
+    console.log('=== Google Gemini API Response ===');
+    console.log('Summary:', summary);
+    console.log('Summary Length:', summary.length, 'characters');
+    console.log('================================');
+
+    return summary.trim();
+  } catch (error) {
+    console.error('Error generating summary with Gemini:', error);
+    throw new Error(`Failed to generate summary: ${error.message}`);
+  }
+}
+
+/**
+ * Generate summary using Hugging Face Router Chat Completions API (fallback)
+ */
+async function generateSummaryWithHuggingFace(reviewText, model = 'zai-org/GLM-4.7-Flash:zai-org') {
   try {
     // Truncate if too long (Hugging Face models have token limits)
     const maxLength = 8000; // Adjust based on model limits
@@ -175,9 +223,9 @@ async function generateSummary(reviewText, model = 'zai-org/GLM-4.7-Flash:zai-or
           content: `Please provide a concise summary (50-200 words) of the following customer reviews:\n\n${truncatedText}\n\nSummary:`,
         },
       ],
-          model: model,
-          max_tokens: 500, // Increased to allow full response
-          temperature: 0.7,
+      model: model,
+      max_tokens: 500, // Increased to allow full response
+      temperature: 0.7,
     };
 
     // Log the payload being sent to Hugging Face
@@ -305,6 +353,27 @@ async function generateSummary(reviewText, model = 'zai-org/GLM-4.7-Flash:zai-or
 }
 
 /**
+ * Generate summary - routes to appropriate AI provider
+ */
+async function generateSummary(reviewText, model = null) {
+  const provider = AI_PROVIDER.toLowerCase();
+  
+  if (provider === 'gemini') {
+    if (!GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY environment variable is not set');
+    }
+    return await generateSummaryWithGemini(reviewText, model || 'gemini-1.5-flash');
+  } else if (provider === 'huggingface' || provider === 'hf') {
+    if (!HUGGINGFACE_API_KEY) {
+      throw new Error('HUGGINGFACE_API_KEY environment variable is not set');
+    }
+    return await generateSummaryWithHuggingFace(reviewText, model || 'zai-org/GLM-4.7-Flash:zai-org');
+  } else {
+    throw new Error(`Unsupported AI provider: ${provider}. Use 'gemini' or 'huggingface'`);
+  }
+}
+
+/**
  * Main handler
  */
 export default async function handler(req, res) {
@@ -324,11 +393,20 @@ export default async function handler(req, res) {
   }
 
   try {
-    const model = req.body?.model || 'zai-org/GLM-4.7-Flash:zai-org';
+    const provider = AI_PROVIDER.toLowerCase();
+    const model = req.body?.model || (provider === 'gemini' ? 'gemini-2.5-flash' : 'zai-org/GLM-4.7-Flash:zai-org');
 
-    // Check for API key
-    if (!process.env.HUGGINGFACE_API_KEY) {
-      return res.status(500).json({ error: 'Hugging Face API key not configured' });
+    // Check for API key based on provider
+    if (provider === 'gemini' && !GEMINI_API_KEY) {
+      return res.status(500).json({ 
+        error: 'Gemini API key not configured',
+        details: 'Please set GEMINI_API_KEY environment variable in Vercel'
+      });
+    } else if ((provider === 'huggingface' || provider === 'hf') && !HUGGINGFACE_API_KEY) {
+      return res.status(500).json({ 
+        error: 'Hugging Face API key not configured',
+        details: 'Please set HUGGINGFACE_API_KEY environment variable in Vercel'
+      });
     }
 
     // Reviews should be sent from the client (browser) to avoid 403 errors
@@ -372,6 +450,7 @@ export default async function handler(req, res) {
 
     // Log the summary result
     console.log('=== Review Summary Generated ===');
+    console.log('Provider:', AI_PROVIDER);
     console.log('Review Count:', reviewTexts.length);
     console.log('Model Used:', model);
     console.log('Summary:', summary);
