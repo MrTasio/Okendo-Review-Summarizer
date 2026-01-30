@@ -6,10 +6,9 @@
  * Body: {} (no parameters needed - fetches all reviews)
  */
 
-import { HfInference } from '@huggingface/inference';
-
-// Initialize Hugging Face client
-const hf = new HfInference(process.env.HUGGINGFACE_API_KEY);
+// Use direct fetch to Hugging Face API with new endpoint
+const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
+const HUGGINGFACE_ENDPOINT = 'https://router.huggingface.co';
 
 /**
  * Fetch reviews from Okendo API
@@ -97,7 +96,7 @@ function combineReviews(reviewTexts) {
 }
 
 /**
- * Generate summary using Hugging Face
+ * Generate summary using Hugging Face API (new endpoint)
  */
 async function generateSummary(reviewText, model = 'facebook/bart-large-cnn') {
   try {
@@ -107,18 +106,44 @@ async function generateSummary(reviewText, model = 'facebook/bart-large-cnn') {
       ? reviewText.substring(0, maxLength) 
       : reviewText;
 
-    // Use Hugging Face summarization
-    const result = await hf.summarization({
-      model: model,
-      inputs: truncatedText,
-      parameters: {
-        max_length: 200, // Maximum length of summary
-        min_length: 50,   // Minimum length of summary
-        do_sample: false
-      }
+    // Use Hugging Face API directly with new router endpoint
+    // Router endpoint format: https://router.huggingface.co/models/{model}
+    const response = await fetch(`${HUGGINGFACE_ENDPOINT}/models/${model}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${HUGGINGFACE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        inputs: truncatedText,
+        parameters: {
+          max_length: 200, // Maximum length of summary
+          min_length: 50,   // Minimum length of summary
+          do_sample: false
+        },
+        options: {
+          wait_for_model: true
+        }
+      })
     });
 
-    return result.summary_text;
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Hugging Face API error: ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    
+    // Handle different response formats
+    if (result.summary_text) {
+      return result.summary_text;
+    } else if (Array.isArray(result) && result[0] && result[0].summary_text) {
+      return result[0].summary_text;
+    } else if (result[0] && typeof result[0] === 'string') {
+      return result[0];
+    } else {
+      throw new Error('Unexpected response format from Hugging Face API');
+    }
   } catch (error) {
     console.error('Error generating summary:', error);
     throw new Error(`Failed to generate summary: ${error.message}`);
